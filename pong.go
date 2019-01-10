@@ -5,13 +5,13 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight int = 1920, 1080
+const winWidth, winHeight int = 960, 540
 
 type color struct {
 	r, g, b byte
 }
 
-type position struct {
+type pos struct {
 	// float32 is big enough to use in most general task,
 	// and small enough for performance
 	x, y float32
@@ -19,23 +19,47 @@ type position struct {
 
 // Making the ball
 type ball struct {
-	color
-	position
-	r  int
+	pos
 	xv float32
 	yv float32
+	r  int
+	color
 }
 
+// *ball is a pointer, and an experience dev said that it is better to use it
+// I need to research and test more, is it true or not.
 func (ball *ball) draw(pixels []byte) {
+	for y := -ball.r; y < ball.r; y++ {
+		for x := -ball.r; x < ball.r; x++ {
+			if x*x+y*y < ball.r*ball.r {
+				setPixel(int(ball.x)+x, int(ball.y)+y, ball.color, pixels)
+			}
+		}
+	}
+}
 
+func (ball *ball) update() {
+	ball.x += ball.xv
+	ball.y += ball.yv
+
+	// handle collision
+	if ball.y < 0 || int(ball.y) > winHeight {
+		ball.yv = -ball.yv
+	}
+
+	// handle ball goes out of screen
+	if ball.x < 0 || int(ball.x) > winWidth {
+		ball.x = 300
+		ball.y = 300
+	}
 }
 
 // Making the paddles
 type paddle struct {
-	color
-	position
-	h int
+	pos
 	w int
+	h int
+	color
 }
 
 func (paddle *paddle) draw(pixels []byte) {
@@ -44,8 +68,19 @@ func (paddle *paddle) draw(pixels []byte) {
 
 	for y := 0; y < paddle.h; y++ {
 		for x := 0; x < paddle.w; x++ {
-			setPixel(startX+x, startY+y, color{255, 255, 255}, pixels)
+			setPixel(startX+x, startY+y, paddle.color, pixels)
 		}
+	}
+}
+
+// In C they prefix with SDL_, so all func and variables name prepend with SDL
+// in Go we import as sdl so it will be sdl.SCANCODE
+func (paddle *paddle) update(keyState []uint8) {
+	if keyState[sdl.SCANCODE_UP] != 0 {
+		paddle.y--
+	}
+	if keyState[sdl.SCANCODE_DOWN] != 0 {
+		paddle.y++
 	}
 }
 
@@ -56,6 +91,12 @@ func setPixel(x, y int, c color, pixels []byte) {
 		pixels[index] = c.r
 		pixels[index+1] = c.g
 		pixels[index+2] = c.b
+	}
+}
+
+func clear(pixels []byte) {
+	for i := range pixels {
+		pixels[i] = 0
 	}
 }
 
@@ -105,15 +146,22 @@ func main() {
 
 	pixels := make([]byte, winWidth*winHeight*4)
 
-	for y := 0; y < winHeight; y++ {
-		for x := 0; x < winWidth; x++ {
-			setPixel(x, y, color{byte(x % 255), byte(y % 255), 0}, pixels)
-		}
+	player1 := paddle{
+		pos:   pos{100, 100},
+		w:     20,
+		h:     100,
+		color: color{255, 255, 255},
 	}
 
-	tex.Update(nil, pixels, winWidth*4)
-	renderer.Copy(tex, nil, nil)
-	renderer.Present()
+	ball := ball{
+		pos:   pos{300, 300},
+		xv:    0,
+		yv:    0,
+		r:     20,
+		color: color{255, 255, 255},
+	}
+
+	keyState := sdl.GetKeyboardState()
 
 	// Changd after EP 06 to address MacOSX
 	// OSX requires that you consume events for windows to open and work properly
@@ -124,5 +172,15 @@ func main() {
 				return
 			}
 		}
+		clear(pixels)
+		player1.draw(pixels)
+		player1.update(keyState)
+		ball.draw(pixels)
+
+		tex.Update(nil, pixels, winWidth*4)
+		renderer.Copy(tex, nil, nil)
+		renderer.Present()
+
+		sdl.Delay(16)
 	}
 }
