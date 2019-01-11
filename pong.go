@@ -38,12 +38,12 @@ func (ball *ball) draw(pixels []byte) {
 	}
 }
 
-func (ball *ball) update() {
+func (ball *ball) update(paddleLeft *paddle, paddleRight *paddle) {
 	ball.x += ball.xv
 	ball.y += ball.yv
 
 	// handle collision
-	if ball.y < 0 || int(ball.y) > winHeight {
+	if int(ball.y)-ball.r < 0 || int(ball.y)+ball.r > winHeight {
 		ball.yv = -ball.yv
 	}
 
@@ -51,6 +51,11 @@ func (ball *ball) update() {
 	if ball.x < 0 || int(ball.x) > winWidth {
 		ball.x = 300
 		ball.y = 300
+	}
+
+	if ball.x < paddleLeft.x+float32(paddleLeft.w)/2 ||
+		ball.x > paddleRight.x-float32(paddleRight.w)/2 {
+		ball.xv = -ball.xv
 	}
 }
 
@@ -77,11 +82,16 @@ func (paddle *paddle) draw(pixels []byte) {
 // in Go we import as sdl so it will be sdl.SCANCODE
 func (paddle *paddle) update(keyState []uint8) {
 	if keyState[sdl.SCANCODE_UP] != 0 {
-		paddle.y--
+		paddle.y -= 5
 	}
 	if keyState[sdl.SCANCODE_DOWN] != 0 {
-		paddle.y++
+		paddle.y += 5
 	}
+}
+
+// player 2 is the bot, this is A.I. and it never loses
+func (paddle *paddle) AIUpdate(ball *ball) {
+	paddle.y = ball.y
 }
 
 func setPixel(x, y int, c color, pixels []byte) {
@@ -147,7 +157,14 @@ func main() {
 	pixels := make([]byte, winWidth*winHeight*4)
 
 	player1 := paddle{
-		pos:   pos{100, 100},
+		pos:   pos{50, 100},
+		w:     20,
+		h:     100,
+		color: color{255, 255, 255},
+	}
+
+	player2 := paddle{
+		pos:   pos{float32(winWidth) - 50, 100},
 		w:     20,
 		h:     100,
 		color: color{255, 255, 255},
@@ -155,8 +172,8 @@ func main() {
 
 	ball := ball{
 		pos:   pos{300, 300},
-		xv:    0,
-		yv:    0,
+		xv:    4,
+		yv:    2,
 		r:     20,
 		color: color{255, 255, 255},
 	}
@@ -173,9 +190,15 @@ func main() {
 			}
 		}
 		clear(pixels)
+
 		player1.draw(pixels)
 		player1.update(keyState)
+
+		player2.draw(pixels)
+		player2.AIUpdate(&ball)
+
 		ball.draw(pixels)
+		ball.update(&player1, &player2)
 
 		tex.Update(nil, pixels, winWidth*4)
 		renderer.Copy(tex, nil, nil)
